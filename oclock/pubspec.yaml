@@ -1,0 +1,17 @@
+name: oclock
+version: 1.0.0+1
+description: A real-time clock app for Android (landscape, 3% margin)
+environment:
+  sdk: ">=2.17.0 <4.0.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  screen_brightness: ^2.1.6
+  wakelock: ^0.6.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
