@@ -1,81 +1,108 @@
-// Flutter app: Real-time clock, hh:mm.sss, landscape, 3% margin
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'dart:async';
 import 'package:screen_brightness/screen_brightness.dart';
 import 'package:wakelock/wakelock.dart';
+import 'components/flip_block.dart';
+import 'components/colon_block.dart';
+import 'components/ampm_block.dart';
+import 'package:flutter/material.dart';
+import 'dart:async';
 
-double? _originalBrightness;
+import 'package:flutter/services.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
-  // Giữ màn hình luôn sáng
-  Wakelock.enable();
-  runApp(const OClockApp());
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  runApp(const FlipClockApp());
 }
 
-class OClockApp extends StatelessWidget {
-  const OClockApp({super.key});
+class FlipClockApp extends StatelessWidget {
+  const FlipClockApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'OClock',
-      theme: ThemeData.dark(),
-      home: const ClockScreen(),
+      debugShowCheckedModeBanner: false,
+      home: const FlipClockScreen(),
     );
   }
 }
 
-class ClockScreen extends StatelessWidget {
-  const ClockScreen({super.key});
+class FlipClockScreen extends StatelessWidget {
+  const FlipClockScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Force landscape orientation
-    return const Scaffold(
-      backgroundColor: Colors.black, // nền đen tuyệt đối cho toàn màn hình
-      body: SafeArea(
-        child: ClockWidget(),
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            double padding = constraints.maxWidth * 0.03; // Padding 3% mỗi bên
+            double availableWidth = constraints.maxWidth - (2 * padding);
+            // Độ rộng tối đa trừ cho khoảng cách 2 bên
+            double blockCount = 6; // 6 số
+            double colonCount = 2; // 2 dấu :
+            double ampmWidthRatio = 1; // AM/PM nhỏ hơn khối số
+            double blockSpacing = 0.08; // spacing giữa các khối
+            double blockWidth = availableWidth /
+                (blockCount +
+                    (colonCount * 0.5) +
+                    ((blockCount + colonCount) * blockSpacing) +
+                    ampmWidthRatio);
+            double blockHeight = constraints.maxHeight * 0.35;
+            double fontSize = blockHeight * 0.6;
+            return Padding(
+              padding: EdgeInsets.symmetric(horizontal: padding),
+              child: FlipClockRow(
+                blockWidth: blockWidth,
+                blockHeight: blockHeight,
+                fontSize: fontSize,
+              ),
+            );
+          },
+        ),
       ),
     );
   }
 }
 
-class ClockWidget extends StatefulWidget {
-  const ClockWidget({super.key});
+class FlipClockRow extends StatefulWidget {
+  final double blockWidth;
+  final double blockHeight;
+  final double fontSize;
+  const FlipClockRow(
+      {super.key,
+      required this.blockWidth,
+      required this.blockHeight,
+      required this.fontSize});
 
   @override
-  State<ClockWidget> createState() => _ClockWidgetState();
+  State<FlipClockRow> createState() => _FlipClockRowState();
 }
 
-class _ClockWidgetState extends State<ClockWidget> {
+class _FlipClockRowState extends State<FlipClockRow> {
   late Timer _timer;
   late DateTime _now;
+
+  double? _originalBrightness;
 
   @override
   void initState() {
     super.initState();
     _now = DateTime.now();
-    _timer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
+    _timer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
       setState(() {
         _now = DateTime.now();
       });
     });
-    // Lưu và chỉnh độ sáng màn hình xuống 30%
-    _setBrightness();
+    _initBrightnessAndWakelock();
   }
 
-  Future<void> _setBrightness() async {
+  Future<void> _initBrightnessAndWakelock() async {
     try {
       _originalBrightness = await ScreenBrightness().current;
       await ScreenBrightness().setScreenBrightness(0.3);
     } catch (e) {}
+    Wakelock.enable();
   }
 
   @override
@@ -85,33 +112,78 @@ class _ClockWidgetState extends State<ClockWidget> {
     if (_originalBrightness != null) {
       ScreenBrightness().setScreenBrightness(_originalBrightness!);
     }
+    Wakelock.disable();
     super.dispose();
-  }
-
-  String _formatTime(DateTime dt) {
-    final h = dt.hour.toString().padLeft(2, '0');
-    final m = dt.minute.toString().padLeft(2, '0');
-    final s = dt.second.toString().padLeft(2, '0'); // 2 số, 00-59
-    return '$h:$m:$s';
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      alignment: Alignment.center,
-      color: Colors.black, // nền đen tuyệt đối
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Text(
-          _formatTime(_now),
-          style: const TextStyle(
-            fontSize: 120,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 2,
-            color: Colors.white, // chữ trắng
-          ),
+    final hour = _now.hour % 12 == 0 ? 12 : _now.hour % 12;
+    final hourStr = hour.toString().padLeft(2, '0');
+    final minuteStr = _now.minute.toString().padLeft(2, '0');
+    final secondStr = _now.second.toString().padLeft(2, '0');
+    final isPM = _now.hour >= 12;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        FlipBlock(
+          digit: hourStr[0],
+          width: widget.blockWidth,
+          height: widget.blockHeight,
+          fontSize: widget.fontSize,
         ),
-      ),
+        SizedBox(width: widget.blockWidth * 0.04),
+        FlipBlock(
+          digit: hourStr[1],
+          width: widget.blockWidth,
+          height: widget.blockHeight,
+          fontSize: widget.fontSize,
+        ),
+        SizedBox(width: widget.blockWidth * 0.04),
+        ColonBlock(
+          fontSize: widget.fontSize * 0.7,
+          height: widget.blockHeight,
+        ),
+        SizedBox(width: widget.blockWidth * 0.04),
+        FlipBlock(
+          digit: minuteStr[0],
+          width: widget.blockWidth,
+          height: widget.blockHeight,
+          fontSize: widget.fontSize,
+        ),
+        SizedBox(width: widget.blockWidth * 0.04),
+        FlipBlock(
+          digit: minuteStr[1],
+          width: widget.blockWidth,
+          height: widget.blockHeight,
+          fontSize: widget.fontSize,
+        ),
+        SizedBox(width: widget.blockWidth * 0.04),
+        ColonBlock(
+          fontSize: widget.fontSize * 0.7,
+          height: widget.blockHeight,
+        ),
+        SizedBox(width: widget.blockWidth * 0.04),
+        FlipBlock(
+          digit: secondStr[0],
+          width: widget.blockWidth,
+          height: widget.blockHeight,
+          fontSize: widget.fontSize,
+        ),
+        SizedBox(width: widget.blockWidth * 0.04),
+        FlipBlock(
+          digit: secondStr[1],
+          width: widget.blockWidth,
+          height: widget.blockHeight,
+          fontSize: widget.fontSize,
+        ),
+        SizedBox(width: widget.blockWidth * 0.3),
+        AmPmBlock(
+          isPM: isPM,
+          height: widget.blockHeight * 0.5,
+        ),
+      ],
     );
   }
 }
